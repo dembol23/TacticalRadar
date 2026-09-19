@@ -7,30 +7,9 @@ import {
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
-type Point = [number, number];
-interface Event {
-  minute: number;
-  second: number;
-  type: string;
-  team: string;
-  player: string;
-  startLocation?: Point;
-  endLocation?: Point;
-}
-interface StreamFrame {
-  type: string;
-  data: Event;
-  index: number;
-  total: number;
-}
-interface Visual {
-  type: string;
-  start: { x: number; y: number };
-  end?: { x: number; y: number };
-  color: string;
-  startTime: number;
-  duration: number;
-}
+import type { Event, MatchTeam, Visual } from "./types";
+import { normalizeMatchTeams, shortName } from "./types";
+import FormationPitch from "./FormationPitch";
 
 const EVENT_COLORS: Record<string, string> = {
   Pass: "#f7c948",
@@ -55,6 +34,7 @@ export default function Pitch() {
   const [status, setStatus] = useState("Rozłączono");
   const [playbackSpeed, setPlaybackSpeedState] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [matchTeams, setMatchTeams] = useState<MatchTeam[]>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -172,11 +152,21 @@ export default function Pitch() {
     ws.onclose = () => setStatus("Rozłączono");
 
     ws.onmessage = (e) => {
-      const msg: StreamFrame = JSON.parse(e.data);
+      const msg = JSON.parse(e.data) as {
+        type?: string;
+        teams?: unknown;
+        data?: { teams?: unknown };
+        index?: number;
+        total?: number;
+      };
+      if (msg.type === "MATCH_INFO") {
+        setMatchTeams(normalizeMatchTeams(msg.teams ?? msg.data?.teams));
+        return;
+      }
       if (msg.type === "TICK") {
-        const ev = msg.data;
+        const ev = msg.data as Event;
         setStatus(
-          `[${msg.index}/${msg.total}] ${ev.minute}:${ev.second} - ${ev.player} - ${ev.type}`,
+          `[${msg.index}/${msg.total}] ${ev.minute}:${ev.second} - ${shortName(ev.player)} - ${ev.type}`,
         );
 
         const scaleX = canvas.width / 120.0;
@@ -230,11 +220,16 @@ export default function Pitch() {
 
   const resetPlayback = () => {
     setIsPlaying(false);
+    activeVisuals.current = [];
     sendCommand("RESET");
   };
 
   return (
     <div className="flex flex-col items-center gap-4 p-8">
+      {/* Formation diagrams — separate box */}
+      <FormationPitch teams={matchTeams} />
+
+      {/* Playback controls */}
       <div className="flex gap-4 items-center">
         <button
           onClick={togglePlayback}
@@ -262,22 +257,27 @@ export default function Pitch() {
           <GaugeIcon size={18} />
           <input
             type="range"
+            className="w-32"
             min="0.25"
             max="3"
             step="0.25"
             value={playbackSpeed}
             onChange={(event) => setPlaybackSpeed(Number(event.target.value))}
           />
-          <span>{playbackSpeed}x</span>
+          <span className="w-12 text-right tabular-nums">{playbackSpeed}x</span>
         </label>
       </div>
       <div className="text-gray-300">{status}</div>
-      <canvas
-        ref={canvasRef}
-        width={900}
-        height={600}
-        className="border border-gray-700 rounded shadow-xl"
-      />
+
+      {/* Event canvas (passes map) — no formation overlay */}
+      <div className="w-full max-w-225">
+        <canvas
+          ref={canvasRef}
+          width={900}
+          height={600}
+          className="block w-full rounded border border-gray-700 shadow-xl"
+        />
+      </div>
     </div>
   );
 }

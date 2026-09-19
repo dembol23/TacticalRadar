@@ -26,14 +26,22 @@ func (p Point) MarshalJSON() ([]byte, error) {
 }
 
 type Event struct {
-	ID            string    `json:"id"`
-	Minute        int64     `json:"minute"`
-	Second        int64     `json:"second"`
-	Type          EventType `json:"type"`
-	Team          string    `json:"team"`
-	Player        string    `json:"player"`
-	StartLocation *Point    `json:"startLocation,omitempty"`
-	EndLocation   *Point    `json:"endLocation,omitempty"`
+	ID            string        `json:"id"`
+	Minute        int64         `json:"minute"`
+	Second        int64         `json:"second"`
+	Type          EventType     `json:"type"`
+	Team          string        `json:"team"`
+	Player        string        `json:"player"`
+	StartLocation *Point        `json:"startLocation,omitempty"`
+	EndLocation   *Point        `json:"endLocation,omitempty"`
+	Formation     int           `json:"formation,omitempty"`
+	Lineup        []MatchPlayer `json:"lineup,omitempty"`
+}
+
+type MatchPlayer struct {
+	Name         string `json:"name"`
+	Position     string `json:"position"`
+	JerseyNumber int    `json:"jerseyNumber"`
 }
 
 func (e *Event) UnmarshalJSON(data []byte) error {
@@ -56,6 +64,18 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 		Shot *struct {
 			EndLocation *Point `json:"end_location"`
 		} `json:"shot"`
+		Tactics *struct {
+			Formation int `json:"formation"`
+			Lineup    []struct {
+				Player struct {
+					Name string `json:"name"`
+				} `json:"player"`
+				Position struct {
+					Name string `json:"name"`
+				} `json:"position"`
+				JerseyNumber int `json:"jersey_number"`
+			} `json:"lineup"`
+		} `json:"tactics"`
 	}
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
@@ -88,6 +108,18 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 	if endLocation == nil && wire.Shot != nil {
 		endLocation = wire.Shot.EndLocation
 	}
+	lineup := make([]MatchPlayer, 0)
+	formation := 0
+	if wire.Tactics != nil {
+		formation = wire.Tactics.Formation
+		for _, player := range wire.Tactics.Lineup {
+			lineup = append(lineup, MatchPlayer{
+				Name:         player.Player.Name,
+				Position:     player.Position.Name,
+				JerseyNumber: player.JerseyNumber,
+			})
+		}
+	}
 
 	*e = Event{
 		ID:            wire.ID,
@@ -98,6 +130,8 @@ func (e *Event) UnmarshalJSON(data []byte) error {
 		Player:        playerName,
 		StartLocation: startLocation,
 		EndLocation:   endLocation,
+		Formation:     formation,
+		Lineup:        lineup,
 	}
 	return nil
 }
@@ -124,6 +158,17 @@ func jsonValueName(data json.RawMessage) (string, error) {
 type ClientCommand struct {
 	Action string  `json:"action"`
 	Speed  float64 `json:"speed,omitempty"`
+}
+
+type MatchTeam struct {
+	Name      string        `json:"name"`
+	Formation int           `json:"formation"`
+	Players   []MatchPlayer `json:"players"`
+}
+
+type MatchInfo struct {
+	Type  string      `json:"type"`
+	Teams []MatchTeam `json:"teams"`
 }
 
 type StreamFrame struct {

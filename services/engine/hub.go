@@ -20,6 +20,15 @@ type Hub struct {
 
 const basePlaybackInterval = time.Second * 1
 
+func findStartIndex(events []Event) int {
+	for i, e := range events {
+		if e.Type == "Pass" {
+			return i
+		}
+	}
+	return 0
+}
+
 func NewHub(events []Event) *Hub {
 	return &Hub{
 		clients:    make(map[*Client]bool),
@@ -28,6 +37,7 @@ func NewHub(events []Event) *Hub {
 		unregister: make(chan *Client),
 		events:     events,
 		cursor:     0,
+		cursor:     findStartIndex(events),
 		isPlaying:  false,
 		cmdChan:    make(chan ClientCommand, 100),
 	}
@@ -41,6 +51,13 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
+			info, err := json.Marshal(MatchInfo{
+				Type:  "MATCH_INFO",
+				Teams: buildMatchTeams(h.events),
+			})
+			if err == nil {
+				client.send <- info
+			}
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
@@ -66,6 +83,7 @@ func (h *Hub) Run() {
 			case "RESET":
 				log.Println("Received RESET command")
 				h.cursor = 0
+				h.cursor = findStartIndex(h.events)
 				h.isPlaying = false
 			case "SPEED":
 				if cmd.Speed <= 0 {
@@ -104,4 +122,26 @@ func (h *Hub) Run() {
 			h.cursor++
 		}
 	}
+}
+
+func buildMatchTeams(events []Event) []MatchTeam {
+	teamIndex := make(map[string]int)
+	teams := make([]MatchTeam, 0, 2)
+
+	for _, event := range events {
+		if event.Team == "" || len(event.Lineup) == 0 {
+			continue
+		}
+		index, ok := teamIndex[event.Team]
+		if !ok {
+			index = len(teams)
+			teamIndex[event.Team] = index
+			teams = append(teams, MatchTeam{
+				Name:      event.Team,
+				Formation: event.Formation,
+				Players:   event.Lineup,
+			})
+		}
+	}
+	return teams
 }
