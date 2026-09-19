@@ -22,3 +22,27 @@ tasks:
     dir: services/engine
     cmds:
       - go run .
+
+  format:go:
+    desc: "Format Go"
+    dir: services/engine
+    cmds:
+      - go fmt ./...
+      - golangci-lint run --fix
+
+  format:python:
+    desc: "Format Python"
+    dir: services/analytics
+    cmds:
+      - ruff check --fix .
+      - ruff format .
+
+  format:web:
+    desc: "Format Next.js"
+    dir: apps/web
+    cmds:
+      - npx prettier --write .
+
+  format:
+    desc: "Format all"
+    deps: [format:go, format:python, format:web]
