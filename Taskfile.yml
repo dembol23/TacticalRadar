@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: '3'
+
+tasks:
+  default:
+    desc: Start the web app and engine
+    deps: [dev]
+
+  dev:
+    desc: Start the web app and engine
+    deps: [web, engine]
+
+  web:
+    desc: Start the Next.js development server
+    dir: apps/web
+    cmds:
+      - npm run dev
+
+  engine:
+    desc: Start the Go engine server
+    dir: services/engine
+    cmds:
+      - go run .
