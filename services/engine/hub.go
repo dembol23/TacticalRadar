@@ -15,8 +15,10 @@ type Hub struct {
 	events    []Event
 	cursor    int
 	isPlaying bool
-	cmdChan   chan string
+	cmdChan   chan ClientCommand
 }
+
+const basePlaybackInterval = time.Second * 1
 
 func NewHub(events []Event) *Hub {
 	return &Hub{
@@ -27,12 +29,12 @@ func NewHub(events []Event) *Hub {
 		events:     events,
 		cursor:     0,
 		isPlaying:  false,
-		cmdChan:    make(chan string, 100),
+		cmdChan:    make(chan ClientCommand, 100),
 	}
 }
 
 func (h *Hub) Run() {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(basePlaybackInterval)
 	defer ticker.Stop()
 
 	for {
@@ -54,7 +56,7 @@ func (h *Hub) Run() {
 				}
 			}
 		case cmd := <-h.cmdChan:
-			switch cmd {
+			switch cmd.Action {
 			case "START":
 				log.Println("Received START command")
 				h.isPlaying = true
@@ -65,6 +67,17 @@ func (h *Hub) Run() {
 				log.Println("Received RESET command")
 				h.cursor = 0
 				h.isPlaying = false
+			case "SPEED":
+				if cmd.Speed <= 0 {
+					continue
+				}
+				interval := time.Duration(float64(basePlaybackInterval) / cmd.Speed)
+				if interval < 50*time.Millisecond {
+					interval = 50 * time.Millisecond
+				}
+				ticker.Stop()
+				ticker = time.NewTicker(interval)
+				log.Printf("Playback speed set to %.2fx (%s interval)", cmd.Speed, interval)
 			}
 		case <-ticker.C:
 			if !h.isPlaying || len(h.events) == 0 {

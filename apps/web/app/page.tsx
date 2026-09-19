@@ -1,4 +1,4 @@
-import Pitch from '@/components/Pitch';
+import Pitch from "@/components/Pitch";
 
 export default function Home() {
   return (

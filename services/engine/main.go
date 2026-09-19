@@ -31,7 +31,7 @@ func loadEvents(path string) ([]Event, error) {
 }
 
 func main() {
-	events, err := loadEvents("testdata/events_poc.json")
+	events, err := loadEvents("testdata/16095.json")
 	if err != nil {
 		log.Fatalf("Failed to load events: %v", err)
 	}
