@@ -156,8 +156,9 @@ func jsonValueName(data json.RawMessage) (string, error) {
 }
 
 type ClientCommand struct {
-	Action string  `json:"action"`
-	Speed  float64 `json:"speed,omitempty"`
+	Action     string      `json:"action"`
+	Speed      float64     `json:"speed,omitempty"`
+	EventTypes []EventType `json:"eventTypes,omitempty"`
 }
 
 type MatchTeam struct {

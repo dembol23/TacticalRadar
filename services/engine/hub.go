@@ -15,6 +15,7 @@ type Hub struct {
 	events    []Event
 	cursor    int
 	isPlaying bool
+	filters   map[EventType]bool
 	cmdChan   chan ClientCommand
 }
 
@@ -36,11 +37,15 @@ func NewHub(events []Event) *Hub {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		events:     events,
-		cursor:     0,
 		cursor:     findStartIndex(events),
 		isPlaying:  false,
+		filters:    nil,
 		cmdChan:    make(chan ClientCommand, 100),
 	}
+}
+
+func (h *Hub) eventEnabled(event Event) bool {
+	return h.filters == nil || h.filters[event.Type]
 }
 
 func (h *Hub) Run() {
@@ -96,10 +101,19 @@ func (h *Hub) Run() {
 				ticker.Stop()
 				ticker = time.NewTicker(interval)
 				log.Printf("Playback speed set to %.2fx (%s interval)", cmd.Speed, interval)
+			case "FILTER":
+				h.filters = make(map[EventType]bool, len(cmd.EventTypes))
+				for _, eventType := range cmd.EventTypes {
+					h.filters[eventType] = true
+				}
 			}
 		case <-ticker.C:
 			if !h.isPlaying || len(h.events) == 0 {
 				continue
+			}
+
+			for h.cursor < len(h.events) && !h.eventEnabled(h.events[h.cursor]) {
+				h.cursor++
 			}
 
 			if h.cursor >= len(h.events) {

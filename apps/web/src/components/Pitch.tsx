@@ -23,6 +23,7 @@ const EVENT_COLORS: Record<string, string> = {
 };
 
 const LINE_OPACITY = [1, 0.8, 0.6, 0.4, 0.2];
+const ALL_EVENT_TYPES = Object.keys(EVENT_COLORS);
 
 export default function Pitch() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -31,10 +32,30 @@ export default function Pitch() {
 
   const activeVisuals = useRef<Visual[]>([]);
 
-  const [status, setStatus] = useState("Rozłączono");
+  const [status, setStatus] = useState("Disconnected");
   const [playbackSpeed, setPlaybackSpeedState] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [matchTeams, setMatchTeams] = useState<MatchTeam[]>([]);
+
+  const [enabledEventTypes, setEnabledEventTypes] = useState<Set<string>>(
+    new Set(ALL_EVENT_TYPES)
+  );
+
+  const sendCommand = (cmd: string, value?: number, eventTypes?: string[]) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({ action: cmd, speed: value, eventTypes }),
+      );
+    }
+  };
+
+  const toggleEventType = (type: string) => {
+    const next = new Set(enabledEventTypes);
+    if (next.has(type)) next.delete(type);
+    else next.add(type);
+    setEnabledEventTypes(next);
+    sendCommand("FILTER", undefined, Array.from(next));
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -53,7 +74,7 @@ export default function Pitch() {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
       ctx.lineWidth = 2;
       ctx.strokeRect(0, 0, canvas.width, canvas.height);
-      // Linia środkowa
+      // Center line
       ctx.beginPath();
       ctx.moveTo(canvas.width / 2, 0);
       ctx.lineTo(canvas.width / 2, canvas.height);
@@ -148,8 +169,11 @@ export default function Pitch() {
     const ws = new WebSocket("ws://localhost:8080/ws");
     wsRef.current = ws;
 
-    ws.onopen = () => setStatus("Połączono");
-    ws.onclose = () => setStatus("Rozłączono");
+    ws.onopen = () => {
+      setStatus("Connected");
+      sendCommand("FILTER", undefined, ALL_EVENT_TYPES);
+    };
+    ws.onclose = () => setStatus("Disconnected");
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data) as {
@@ -199,12 +223,6 @@ export default function Pitch() {
       ws.close();
     };
   }, []);
-
-  const sendCommand = (cmd: string, value?: number) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ action: cmd, speed: value }));
-    }
-  };
 
   const setPlaybackSpeed = (speed: number) => {
     playbackSpeedRef.current = speed;
@@ -269,14 +287,42 @@ export default function Pitch() {
       </div>
       <div className="text-gray-300">{status}</div>
 
-      {/* Event canvas (passes map) — no formation overlay */}
-      <div className="w-full max-w-225">
-        <canvas
-          ref={canvasRef}
-          width={900}
-          height={600}
-          className="block w-full rounded border border-gray-700 shadow-xl"
-        />
+      {/* Main pitch area with sidebar */}
+      <div className="flex w-full max-w-279 gap-6">
+        {/* Left side: checkboxes */}
+        <div className="w-48 shrink-0 flex flex-col gap-2 rounded-lg border border-gray-700 bg-gray-800/80 p-4">
+          <h3 className="mb-2 font-semibold text-gray-300 text-sm uppercase tracking-wider border-b border-gray-700 pb-2">
+            Events
+          </h3>
+          {Object.entries(EVENT_COLORS).map(([type, color]) => (
+            <label
+              key={type}
+              className="flex items-center gap-3 text-sm text-gray-400 cursor-pointer hover:text-gray-200 transition-colors"
+            >
+              <input
+                type="checkbox"
+                checked={enabledEventTypes.has(type)}
+                onChange={() => toggleEventType(type)}
+                className="w-4 h-4 accent-green-600 rounded cursor-pointer"
+              />
+              <span
+                className="w-3 h-3 rounded-full shrink-0"
+                style={{ backgroundColor: color }}
+              ></span>
+              <span className="truncate">{type}</span>
+            </label>
+          ))}
+        </div>
+
+        {/* Event canvas (passes map) — no formation overlay */}
+        <div className="flex-1">
+          <canvas
+            ref={canvasRef}
+            width={900}
+            height={600}
+            className="block w-full rounded border border-gray-700 shadow-xl bg-[#1f242c]"
+          />
+        </div>
       </div>
     </div>
   );
